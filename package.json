@@ -20,8 +20,8 @@
     "test": "npm run build && node --test tests/*.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@modelcontextprotocol/server": "^2.0.0-beta.5"
   },
   "devDependencies": {
     "@types/node": "^26",
