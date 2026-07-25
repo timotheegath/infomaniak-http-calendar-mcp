@@ -1,0 +1,36 @@
+# Keep these for `npm install` -> `prepare` -> `npm run build`:
+# - package.json, package-lock.json (install/ci inputs)
+# - src/, tsconfig.json (TypeScript compile)
+
+# Real env files and secret variants. .env.example is documentation and stays tracked.
+.env
+.env.*
+!.env.example
+
+# Git metadata (never needed at build or runtime).
+.git
+.gitignore
+.github
+
+# Dependencies and generated output.
+node_modules
+dist
+
+# Tests are not part of the runtime image.
+tests
+
+# Logs and editor/OS scratch.
+*.log
+npm-debug.log*
+.DS_Store
+.vscode
+.idea
+
+# OpenSpec change artifacts not needed for the build.
+openspec
+
+# Local agent/workflow artifacts.
+.opencode
+
+# This file itself is consumed by Docker, not by the application.
+.dockerignore

@@ -1,2 +1,8 @@
 dist
 node_modules
+
+# Local environment files (never commit credentials).
+# .env.example is documentation only and stays tracked.
+.env
+.env.*
+!.env.example
