@@ -2,10 +2,14 @@
   "name": "@infomaniak/mcp-server-calendar",
   "version": "1.0.3",
   "description": "MCP server for interacting with Infomaniak Calendar",
-  "license": "MIT",
-  "author": "Infonaniak (https://infomaniak.com)",
-  "homepage": "https://infomaniak.com",
-  "bugs": "https://github.com/infomaniak/mcp-server-calendar/issues",
+  "license": "GPL-3.0-only",
+  "author": "Infomaniak (https://infomaniak.com)",
+  "homepage": "https://github.com/timotheegath/infomaniak-http-calendar-mcp",
+  "bugs": "https://github.com/timotheegath/infomaniak-http-calendar-mcp/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timotheegath/infomaniak-http-calendar-mcp.git"
+  },
   "type": "module",
   "bin": {
     "mcp-server-calendar": "dist/index.js"

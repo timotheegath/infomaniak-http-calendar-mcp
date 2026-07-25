@@ -234,6 +234,24 @@ If you encounter permission errors, verify that:
    (loopback or trusted-LAN), and an authenticated proxy or firewall is in
    place for any non-loopback path
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test instructions, and PR
+guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for supported versions and private vulnerability
+reporting. Do not open public issues for security vulnerabilities.
+
+## AI development disclosure
+
+Most of this project was developed with AI coding agents and large language
+models via [OpenCode](https://github.com/sst/opencode). A human developer
+reviewed all generated code, tested it, and accepts full responsibility for
+the project. No AI system owns copyright or is listed as an author.
+
 ## License
 
-This MCP server is licensed under the MIT License.
+GNU General Public License v3.0 only — see [LICENSE](LICENSE) for the full
+text.
