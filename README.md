@@ -134,10 +134,11 @@ at runtime only — it is never baked into the image.
 #### Same-host authenticated TLS reverse proxy (recommended)
 
 ```bash
+docker build -t calendar-mcp:local .
 docker run -d --rm --name calendar-mcp \
   -p 127.0.0.1:4500:4500 \
   --env-file .env \
-  ghcr.io/infomaniak/mcp-server-calendar
+  calendar-mcp:local
 ```
 
 - `-p 127.0.0.1:4500:4500` publishes only on loopback so an authenticated
@@ -159,10 +160,11 @@ hostnames you intend to serve. Host/Origin validation is a DNS-rebinding and
 browser-origin defense — it is NOT authentication.
 
 ```bash
+docker build -t calendar-mcp:local .
 docker run -d --rm --name calendar-mcp \
   --network trusted_lan \
   --env-file .env \
-  ghcr.io/infomaniak/mcp-server-calendar
+  calendar-mcp:local
 ```
 
 ### Environment variables
@@ -209,7 +211,7 @@ The HTTP migration is intentionally contained:
 Docker build:
 
 ```bash
-docker build -t infomaniak/mcp-server-calendar -f Dockerfile .
+docker build -t calendar-mcp:local -f Dockerfile .
 ```
 
 NPM:
