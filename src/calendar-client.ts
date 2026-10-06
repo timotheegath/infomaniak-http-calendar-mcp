@@ -141,7 +141,7 @@ export class CalendarClient {
         return result;
     }
 
-    async createEvent(title: string, start: string, end: string, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string): Promise<any> {
+    async createEvent(title: string, start: string, end: string, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string, reminderMinutesBefore?: number): Promise<any> {
         let calendar;
         if (calendarId) {
             calendar = {id: calendarId};
@@ -168,6 +168,16 @@ export class CalendarClient {
 
         if (rrule !== undefined) {
             body.rrule = rrule;
+        }
+
+        // Reminder: default to 10 minutes before the event (Timo's calendar
+        // default). Events created through the raw API get NO alarm unless an
+        // `alarms` key is present, so always send one. `reminderMinutesBefore`
+        // === 0 explicitly disables the reminder.
+        if (reminderMinutesBefore === undefined || reminderMinutesBefore !== 0) {
+            body.alarms = [{minutesBefore: reminderMinutesBefore ?? 10, action: "DISPLAY"}];
+        } else {
+            body.alarms = [];
         }
 
         const response = await fetch(
