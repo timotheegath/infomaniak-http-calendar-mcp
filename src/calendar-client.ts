@@ -141,7 +141,7 @@ export class CalendarClient {
         return result;
     }
 
-    async createEvent(title: string, start: string, end: string, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string, reminderMinutesBefore?: number): Promise<any> {
+    async createEvent(title: string, start: string, end: string, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string, reminderMinutesBefore?: number, fullday?: boolean): Promise<any> {
         let calendar;
         if (calendarId) {
             calendar = {id: calendarId};
@@ -159,7 +159,7 @@ export class CalendarClient {
             freebusy: "busy",
             type: "event",
             calendar_id: calendar.id,
-            fullday: false,
+            fullday: fullday ?? false,
             timezone_start: profile.data.preferences.timezone.name,
             timezone_end: profile.data.preferences.timezone.name,
             attendees: calendarAttendees,
@@ -170,15 +170,18 @@ export class CalendarClient {
             body.rrule = rrule;
         }
 
-        // Reminder: default to 10 minutes before the event (Timo's calendar
-        // default). Events created through the raw API get NO alarm unless an
-        // `alarms` key is present, so always send one. `reminderMinutesBefore`
-        // === 0 explicitly disables the reminder.
-        if (reminderMinutesBefore === undefined || reminderMinutesBefore !== 0) {
-            body.alarms = [{minutesBefore: reminderMinutesBefore ?? 10, action: "DISPLAY"}];
-        } else {
-            body.alarms = [];
+        // Reminder defaults: all-day events remind 24 hours before (1440 min),
+        // timed events 10 minutes before (Timo's calendar default). Events
+        // created through the raw API get NO alarm unless an `alarms` key is
+        // present, so always send one. An explicit reminderMinutesBefore
+        // overrides the default; 0 disables the reminder entirely.
+        let minutesBefore = fullday ? 1440 : 10;
+        if (reminderMinutesBefore !== undefined && reminderMinutesBefore !== 0) {
+            minutesBefore = reminderMinutesBefore;
         }
+        body.alarms = reminderMinutesBefore === 0
+            ? []
+            : [{minutesBefore, action: "DISPLAY"}];
 
         const response = await fetch(
             `https://api.infomaniak.com/1/calendar/pim/event`,
