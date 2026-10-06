@@ -1,3 +1,5 @@
+import { buildAlarms } from "./alarms.js";
+
 export class CalendarClient {
     private readonly token: string;
     private readonly headers: { Authorization: string; "Content-Type": string };
@@ -141,7 +143,17 @@ export class CalendarClient {
         return result;
     }
 
-    async createEvent(title: string, start: string, end: string, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string): Promise<any> {
+    async createEvent(
+        title: string,
+        start: string,
+        end: string,
+        description: string | undefined,
+        attendees: string | undefined,
+        rrule: string | undefined,
+        calendarId?: string,
+        fullday: boolean = false,
+        reminderMinutesBefore?: number,
+    ): Promise<any> {
         let calendar;
         if (calendarId) {
             calendar = {id: calendarId};
@@ -159,11 +171,13 @@ export class CalendarClient {
             freebusy: "busy",
             type: "event",
             calendar_id: calendar.id,
-            fullday: false,
+            fullday,
             timezone_start: profile.data.preferences.timezone.name,
             timezone_end: profile.data.preferences.timezone.name,
             attendees: calendarAttendees,
             notifyAttendees: calendarAttendees.length > 0,
+            // Alarm shape is { number, unit, type } (lowercase unit, uppercase type) — see ./alarms.ts.
+            alarms: buildAlarms(fullday, reminderMinutesBefore),
         };
 
         if (rrule !== undefined) {
