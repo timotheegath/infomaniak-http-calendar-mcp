@@ -91,11 +91,11 @@ export function createCalendarMcpServer(token: string): McpServer {
             attendees: z.string().describe("List of attendee email addresses as a JSON array").optional(),
             rrule: z.string().describe("Recurrence rule in RFC 5545 format, e.g. FREQ=WEEKLY;INTERVAL=1;BYDAY=MO or FREQ=DAILY or FREQ=MONTHLY;BYMONTHDAY=15. Use empty string to remove recurrence.").optional(),
             calendar_id: z.string().describe("Calendar ID (optional, uses default if not provided)").optional(),
-            fullday: z.boolean().describe("All-day event. Defaults to false. All-day events get a reminder 24 hours before; timed events 10 minutes before.").optional(),
-            reminder_minutes_before: z.number().describe("Minutes before the event to fire a reminder. Defaults to 24 hours (1440) for all-day events (fullday) and 10 minutes otherwise (Timo's calendar default). Pass 0 to create the event with no reminder.").optional(),
+            fullday: z.boolean().describe("All-day event. When true and no reminder_minutes_before is set, defaults to a 24h (1440 minute) reminder.").optional(),
+            reminder_minutes_before: z.number().int().nonnegative().describe("Minutes before start to fire the reminder. 0 = no reminder. Omit to use the default (10 for timed events, 1440 for all-day).").optional(),
         },
-        async ({title, start, end, description, attendees, rrule, calendar_id, reminder_minutes_before, fullday}) => {
-            const response = await calendarClient.createEvent(title, start, end, description, attendees, rrule, calendar_id, reminder_minutes_before, fullday);
+        async ({title, start, end, description, attendees, rrule, calendar_id, fullday, reminder_minutes_before}) => {
+            const response = await calendarClient.createEvent(title, start, end, description, attendees, rrule, calendar_id, fullday, reminder_minutes_before);
 
             return {
                 content: [{type: "text", text: JSON.stringify(response.data)}],
