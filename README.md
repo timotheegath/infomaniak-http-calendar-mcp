@@ -1,5 +1,8 @@
 # Calendar MCP Server
 
+This is a fork from the main Infomaniak Calendar MCP, ported to suppot HTTP Streaming. 
+All methods are kept verbatim. Changes are only constrained to the MCP server's transport method.
+
 MCP Server for the Calendar API.
 
 ## Tools
