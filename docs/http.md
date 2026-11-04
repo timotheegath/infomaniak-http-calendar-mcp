@@ -56,6 +56,7 @@ services:
       # MCP_HTTP_PORT: 4500
       # MCP_HTTP_ALLOWED_HOSTS: calendar.example.com,127.0.0.1,localhost
       # MCP_HTTP_ALLOWED_ORIGINS: https://calendar.example.com
+      # MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN}   # enable bearer auth (see below)
 ```
 
 The image already binds to `0.0.0.0` and exposes `4500`, so you do not need
@@ -101,6 +102,43 @@ The server refuses to start without a valid `CALENDAR_TOKEN`.
 | `MCP_HTTP_PORT`          | `4500`           | `4500`                         | TCP port the HTTP listener binds to. Must be an integer in `1..65535`.                                         |
 | `MCP_HTTP_ALLOWED_HOSTS` | unset            | unset                          | Optional comma-separated allowlist of accepted `Host` header values, written as **bare hostnames** (`calendar.example.com`). A `Host` header carries no scheme, so an entry like `https://calendar.example.com` can never match and that hostname is answered `403` — the server warns about this shape at startup. If unset, loopback hostnames are allowed (`127.0.0.1`, `localhost`, `[::1]`). Do not set it to an empty value: empty is not unset, and an empty list is a startup error. |
 | `MCP_HTTP_ALLOWED_ORIGINS` | unset          | unset                          | Optional comma-separated allowlist of accepted `Origin` header values. A trailing `*` is treated as a suffix wildcard (e.g. `http://127.0.0.1:*` matches any port on that host). The single value `*` therefore matches **every** origin and disables the guard outright — the server warns about it at startup; use concrete origins. If unset, the loopback origins with `:*` are allowed. |
+| `MCP_BEARER_TOKEN`       | unset            | unset                          | Optional static bearer token. When set, every request to `/mcp` must carry `Authorization: Bearer <token>` (scheme case-insensitive, exactly one space); anything else is answered `401` with `WWW-Authenticate: Bearer` before any body is read. Must be non-empty and at least 32 characters — a weaker value is a startup error. Generate one with `openssl rand -base64 32`. When unset, no bearer authentication is performed. |
+
+## Bearer token authentication
+
+When `MCP_BEARER_TOKEN` is set, the server requires a static bearer token on
+**every** request to `/mcp` (any method), checked before the body is read or
+any MCP handler runs:
+
+```bash
+curl -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json, text/event-stream" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}' \
+     http://localhost:4500/mcp
+```
+
+- The scheme is case-insensitive (`Bearer`, `bearer`, …), but there must be
+  exactly one space before the token, and the token is compared verbatim with a
+  constant-time comparison (both sides SHA-256-hashed before
+  `crypto.timingSafeEqual`, so neither the value nor its length leaks).
+- Missing or invalid tokens get the identical response — the server never
+  distinguishes the two:
+
+  ```
+  HTTP/1.1 401 Unauthorized
+  WWW-Authenticate: Bearer
+  Content-Type: application/json
+
+  {"error":"unauthorized"}
+  ```
+
+- `MCP_BEARER_TOKEN` must be non-empty and at least 32 characters; the server
+  refuses to start otherwise (fail fast, no weak tokens). Generate one with
+  `openssl rand -base64 32`.
+- When unset, requests need no `Authorization` header — the loopback dev
+  default. Host/Origin allowlists and all request limits stay enforced
+  independently of the bearer check.
 
 ## Host and origin validation
 

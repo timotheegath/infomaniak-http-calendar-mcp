@@ -4,6 +4,8 @@ export type HttpConfig = {
     port: number;
     allowedHosts: string[];
     allowedOrigins: string[];
+    /** Optional static bearer token; undefined means bearer auth is disabled. */
+    bearerToken?: string;
 };
 
 export function defaultLoopbackAllowedHosts(): string[] {
@@ -23,6 +25,7 @@ export function defaultLoopbackAllowedOrigins(): string[] {
  * 3. MCP_HTTP_PORT — default "4500", must parse to integer in 1..65535
  * 4. MCP_HTTP_ALLOWED_HOSTS — default loopback hostnames, trimmed/deduped, non-empty
  * 5. MCP_HTTP_ALLOWED_ORIGINS — default loopback origins, trimmed/deduped, non-empty
+ * 6. MCP_BEARER_TOKEN — optional; when set, non-empty and at least 32 characters
  */
 export function resolveHttpConfig(env?: NodeJS.ProcessEnv): HttpConfig {
     const e = env ?? process.env;
@@ -91,12 +94,35 @@ export function resolveHttpConfig(env?: NodeJS.ProcessEnv): HttpConfig {
         );
     }
 
+    // 6. MCP_BEARER_TOKEN — optional static bearer token for the HTTP endpoint.
+    // Unset disables bearer auth entirely (loopback dev default). When set it
+    // must be a non-empty string of at least 32 characters; anything weaker
+    // fails fast at startup instead of silently running with a guessable token.
+    // The value is used verbatim (no trimming) — it is compared byte-for-byte
+    // against the token presented in the Authorization header.
+    const rawBearerToken = e.MCP_BEARER_TOKEN;
+    let bearerToken: string | undefined;
+    if (rawBearerToken !== undefined) {
+        if (rawBearerToken === "") {
+            throw new Error(
+                `MCP_BEARER_TOKEN must be non-empty when set (unset it to disable bearer authentication)`,
+            );
+        }
+        if (rawBearerToken.length < 32) {
+            throw new Error(
+                `MCP_BEARER_TOKEN must be at least 32 characters when set, got ${rawBearerToken.length} characters; generate one with \`openssl rand -base64 32\``,
+            );
+        }
+        bearerToken = rawBearerToken;
+    }
+
     return {
         token,
         host: rawHost,
         port,
         allowedHosts,
         allowedOrigins,
+        bearerToken,
     };
 }
 

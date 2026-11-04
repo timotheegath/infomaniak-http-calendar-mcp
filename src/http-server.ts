@@ -1,4 +1,5 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import type {Socket} from "node:net";
 import {StreamableHTTPServerTransport} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +22,13 @@ export type HttpServiceOptions = {
     keepAliveTimeoutMs?: number;
     idleSocketTimeoutMs?: number;
     maxHeaderSize?: number;
+    /**
+     * Optional static bearer token. When set, every request to /mcp must
+     * present `Authorization: Bearer <token>` or it is answered 401 before
+     * any body parsing or MCP handler runs. When undefined, no bearer
+     * authentication is performed (loopback dev default).
+     */
+    bearerToken?: string;
 };
 
 export type HttpServiceHandle = {
@@ -80,6 +88,7 @@ function sendJsonError(
     res: http.ServerResponse,
     status: number,
     message: string,
+    extraHeaders: Record<string, string> = {},
 ): void {
     if (res.headersSent) {
         try {
@@ -93,8 +102,42 @@ function sendJsonError(
     res.writeHead(status, {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(body),
+        ...extraHeaders,
     });
     res.end(body);
+}
+
+// ---------------------------------------------------------------------------
+// Bearer token authentication
+// ---------------------------------------------------------------------------
+
+/**
+ * Constant-time comparison of two secret strings. Both sides are hashed with
+ * SHA-256 first so `timingSafeEqual` always receives two 32-byte buffers —
+ * this avoids both the length-mismatch fast path and any length leak of the
+ * expected token.
+ */
+function secretEquals(presented: string, expected: string): boolean {
+    const presentedHash = crypto.createHash("sha256").update(presented, "utf8").digest();
+    const expectedHash = crypto.createHash("sha256").update(expected, "utf8").digest();
+    return crypto.timingSafeEqual(presentedHash, expectedHash);
+}
+
+/**
+ * Returns true only for an Authorization header of exactly the form
+ * `Bearer <token>`: the scheme is matched case-insensitively, there must be
+ * exactly one space between scheme and token, and the token value is compared
+ * verbatim — no whitespace trimming. Anything else (missing header, wrong
+ * scheme, tab, multiple spaces, empty token) is rejected.
+ */
+function isValidBearerToken(authHeader: string | undefined, expected: string): boolean {
+    if (authHeader === undefined) return false;
+    if (!/^Bearer /i.test(authHeader)) return false;
+    const presented = authHeader.slice("Bearer ".length);
+    // "Bearer " + empty, or "Bearer  …" (more than one space): reject without
+    // trimming, so the extra whitespace can never be laundered into a match.
+    if (presented.length === 0 || presented.startsWith(" ")) return false;
+    return secretEquals(presented, expected);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +242,7 @@ export async function startHttpService(
         keepAliveTimeoutMs = 5_000,
         idleSocketTimeoutMs = 60_000,
         maxHeaderSize = 16 * 1024,
+        bearerToken,
     } = opts;
 
     // --- In-flight handler tracking ---
@@ -233,21 +277,33 @@ export async function startHttpService(
                 return;
             }
 
-            // 2. Host validation
+            // 2. Bearer authentication — enforced before any body parsing or
+            // MCP handler runs. Missing and invalid tokens get the identical
+            // 401 response (no distinction). Host/Origin allowlists below
+            // remain enforced independently for authenticated requests.
+            if (
+                bearerToken !== undefined &&
+                !isValidBearerToken(req.headers.authorization, bearerToken)
+            ) {
+                sendJsonError(res, 401, "unauthorized", {"WWW-Authenticate": "Bearer"});
+                return;
+            }
+
+            // 3. Host validation
             const hostHeader = req.headers.host;
             if (!hostHeader || !hostMatches(allowedHosts, hostHeader)) {
                 sendJsonError(res, 403, "host not allowed");
                 return;
             }
 
-            // 3. Origin validation — only enforced when an Origin header is set
+            // 4. Origin validation — only enforced when an Origin header is set
             const origin = req.headers.origin;
             if (origin !== undefined && !originMatches(allowedOrigins, origin)) {
                 sendJsonError(res, 403, "origin not allowed");
                 return;
             }
 
-            // 4. Route based on method
+            // 5. Route based on method
             if (req.method === "GET" || req.method === "DELETE") {
                 // No body; hand the request to the transport.
                 const p = handleWithTransport(

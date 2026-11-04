@@ -130,6 +130,25 @@ Add the following to your `claude_desktop_config.json`:
 
 1. `CALENDAR_TOKEN`: Required. Your calendar token.
 
+## Authentication
+
+The HTTP transport (`node dist/http.js`, the default in the Docker image)
+supports an optional static bearer token via `MCP_BEARER_TOKEN`:
+
+- Generate a strong value with `openssl rand -base64 32`.
+- When `MCP_BEARER_TOKEN` is set, **every** request to the `/mcp` endpoint must
+  carry `Authorization: Bearer <token>` (the scheme is case-insensitive).
+  Anything else — missing header, wrong scheme, wrong token — is answered
+  `401` with a `WWW-Authenticate: Bearer` header and a JSON error body,
+  before any request body is read.
+- The token must be at least 32 characters long; the server refuses to start
+  with a shorter or empty value.
+- When `MCP_BEARER_TOKEN` is unset, no authentication is required — the
+  default for local/loopback development.
+
+See `docs/http.md` for the full HTTP transport reference (host/origin
+allowlists, ports, docker compose).
+
 ### Troubleshooting
 
 If you encounter permission errors, verify that:

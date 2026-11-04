@@ -307,6 +307,40 @@ describe("resolveHttpConfig", () => {
             /MCP_HTTP_ALLOWED_ORIGINS must contain at least one origin/,
         );
     });
+
+    describe("MCP_BEARER_TOKEN validation", () => {
+        it("is undefined when unset (bearer auth disabled)", () => {
+            const cfg = resolveHttpConfig(baseEnv);
+            assert.strictEqual(cfg.bearerToken, undefined);
+        });
+
+        it("throws when set to an empty string", () => {
+            assert.throws(
+                () => resolveHttpConfig({ ...baseEnv, MCP_BEARER_TOKEN: "" }),
+                /MCP_BEARER_TOKEN must be non-empty when set/,
+            );
+        });
+
+        it("throws when shorter than 32 characters", () => {
+            assert.throws(
+                () =>
+                    resolveHttpConfig({ ...baseEnv, MCP_BEARER_TOKEN: "a".repeat(31) }),
+                /MCP_BEARER_TOKEN must be at least 32 characters.*got 31 characters/,
+            );
+        });
+
+        it("accepts exactly 32 characters", () => {
+            const t = "b".repeat(32);
+            const cfg = resolveHttpConfig({ ...baseEnv, MCP_BEARER_TOKEN: t });
+            assert.strictEqual(cfg.bearerToken, t);
+        });
+
+        it("accepts a long openssl-style token verbatim (no trimming)", () => {
+            const t = "kX9_" + "A".repeat(40) + "=";
+            const cfg = resolveHttpConfig({ ...baseEnv, MCP_BEARER_TOKEN: t });
+            assert.strictEqual(cfg.bearerToken, t);
+        });
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -578,6 +612,187 @@ describe("startHttpService (HTTP transport)", () => {
                 fetchCalls[0].url.includes("/calendar/pim/calendar"),
                 `unexpected fetch URL: ${fetchCalls[0].url}`,
             );
+        });
+    });
+
+    describe("bearer token authentication", () => {
+        const bearer = "test-bearer-token-0123456789abcdef"; // 36 chars
+        const mcpHeaders = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        };
+        const initialize = {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+                protocolVersion: "2024-11-05",
+                capabilities: {},
+                clientInfo: { name: "bearer-test", version: "1.0.0" },
+            },
+        };
+
+        describe("when MCP_BEARER_TOKEN is set", () => {
+            let handle, call, callRaw;
+            before(async () => {
+                fetchCalls = [];
+                ({ handle, call, callRaw } = await startOnRandomPort({
+                    bearerToken: bearer,
+                }));
+            });
+            after(async () => {
+                await handle.shutdown("SIGTERM");
+            });
+
+            it("accepts a valid token and runs the normal 200 MCP flow", async () => {
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders, Authorization: `Bearer ${bearer}` },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 200);
+                assert.strictEqual(
+                    r.body.result.serverInfo.name,
+                    "Infomaniak calendar MCP Server",
+                );
+            });
+
+            it("accepts a case-insensitive scheme", async () => {
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders, Authorization: `bEaReR ${bearer}` },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 200);
+            });
+
+            it("returns 401 with WWW-Authenticate: Bearer when the header is missing, before any handler runs", async () => {
+                const beforeCalls = handle.factoryCalls();
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 401);
+                assert.strictEqual(r.headers.get("www-authenticate"), "Bearer");
+                assert.deepStrictEqual(r.body, { error: "unauthorized" });
+                assert.strictEqual(
+                    handle.factoryCalls(),
+                    beforeCalls,
+                    "MCP handler must not run on 401",
+                );
+            });
+
+            it("returns the identical 401 for a wrong token (no missing-vs-invalid distinction)", async () => {
+                const missing = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders },
+                    body: initialize,
+                });
+                const wrong = await call({
+                    method: "POST",
+                    headers: {
+                        ...mcpHeaders,
+                        Authorization: `Bearer ${"x".repeat(bearer.length)}`,
+                    },
+                    body: initialize,
+                });
+                for (const r of [missing, wrong]) {
+                    assert.strictEqual(r.status, 401);
+                    assert.strictEqual(r.headers.get("www-authenticate"), "Bearer");
+                    assert.deepStrictEqual(r.body, { error: "unauthorized" });
+                }
+                assert.deepStrictEqual(wrong.body, missing.body);
+                assert.strictEqual(
+                    wrong.headers.get("www-authenticate"),
+                    missing.headers.get("www-authenticate"),
+                );
+            });
+
+            it("returns 401 for a wrong scheme", async () => {
+                for (const scheme of ["Basic", "Token", "bearer2"]) {
+                    const r = await call({
+                        method: "POST",
+                        headers: { ...mcpHeaders, Authorization: `${scheme} ${bearer}` },
+                        body: initialize,
+                    });
+                    assert.strictEqual(r.status, 401, `scheme ${scheme} should be 401`);
+                    assert.deepStrictEqual(r.body, { error: "unauthorized" });
+                }
+            });
+
+            it("returns 401 when more than one space separates scheme and token", async () => {
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders, Authorization: `Bearer  ${bearer}` },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 401);
+                assert.deepStrictEqual(r.body, { error: "unauthorized" });
+            });
+
+            it("returns 401 before body parsing (malformed JSON body still gets 401, not 400)", async () => {
+                const beforeCalls = handle.factoryCalls();
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders },
+                    body: "{not valid json",
+                });
+                assert.strictEqual(r.status, 401);
+                assert.deepStrictEqual(r.body, { error: "unauthorized" });
+                assert.strictEqual(handle.factoryCalls(), beforeCalls);
+            });
+
+            it("returns 401 for GET/DELETE without a token too", async () => {
+                for (const method of ["GET", "DELETE"]) {
+                    const r = await call({ method, headers: {} });
+                    assert.strictEqual(r.status, 401, `${method} should be 401`);
+                }
+            });
+
+            it("still enforces the Host allowlist for authenticated requests", async () => {
+                const r = await callRaw({
+                    host: "evil.example",
+                    method: "POST",
+                    path: "/mcp",
+                    headers: {
+                        ...mcpHeaders,
+                        Authorization: `Bearer ${bearer}`,
+                    },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 403);
+            });
+        });
+
+        describe("when MCP_BEARER_TOKEN is unset", () => {
+            let handle, call;
+            before(async () => {
+                fetchCalls = [];
+                ({ handle, call } = await startOnRandomPort());
+            });
+            after(async () => {
+                await handle.shutdown("SIGTERM");
+            });
+
+            it("keeps the current behavior: no Authorization header needed", async () => {
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 200);
+                assert.ok(r.body.result);
+            });
+
+            it("ignores any Authorization header, even a bogus one", async () => {
+                const r = await call({
+                    method: "POST",
+                    headers: { ...mcpHeaders, Authorization: "Bearer wrong" },
+                    body: initialize,
+                });
+                assert.strictEqual(r.status, 200);
+            });
         });
     });
 });
