@@ -1,0 +1,14 @@
+services:
+  calendar-mcp:
+    image: mcp-server-calendar
+    restart: unless-stopped
+    container_name: calendar-mcp
+    ports:
+      - "4500:4500"
+    env_file:
+      - "/home/ubuntu/mcp/calendar-mcp-server/.env"
+      # Optional — only set these if you need to override the image defaults.
+      # MCP_HTTP_HOST: 0.0.0.0
+      # MCP_HTTP_PORT: 4500
+      # MCP_HTTP_ALLOWED_HOSTS: calendar.example.com,127.0.0.1,localhost
+      # MCP_HTTP_ALLOWED_ORIGINS: https://calendar.example.com
