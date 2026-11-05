@@ -37,6 +37,8 @@ MCP Server for the Calendar API.
       - `attendees` (string): JSON array of attendee emails
       - `rrule` (string): Recurrence rule in RFC 5545 format (e.g. `FREQ=WEEKLY;INTERVAL=1;BYDAY=MO`, `FREQ=DAILY`, `FREQ=MONTHLY;BYMONTHDAY=15`)
       - `calendar_id` (string): Calendar identifier (defaults to primary calendar if omitted)
+      - `fullday` (boolean): All-day event
+      - `reminder_minutes_before` (number): Minutes before start to fire the reminder. 0 = no reminder. Omit for the default (10 for timed events, 1440 for all-day).
    - Returns: The created event
    - Notes: Attendees listed in `attendees` receive an actionable invitation email (accept/decline in one click).
 
@@ -53,6 +55,7 @@ MCP Server for the Calendar API.
       - `rrule` (string): Recurrence rule in RFC 5545 format (e.g. `FREQ=WEEKLY;INTERVAL=1;BYDAY=MO`, `FREQ=DAILY`, `FREQ=MONTHLY;BYMONTHDAY=15`). Use empty string to remove recurrence.
       - `calendar_id` (string): Calendar identifier (defaults to event's calendar if omitted)
       - `notify_attendees` (boolean): Send the updated invitation to attendees via email (defaults to false)
+      - `reminder_minutes_before` (number): Minutes before start to fire the reminder. 0 = remove the reminder. Omit to keep the event's existing alarm unchanged.
    - Returns: The updated event
 
 6. `calendar_delete_event`
