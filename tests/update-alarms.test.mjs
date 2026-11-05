@@ -34,7 +34,7 @@ const STORED_EVENT = {
     fullday: false,
     attendees: [],
     // Stored shape as returned by GET /1/calendar/pim/event/<id>
-    alarms: [{minutesBefore: 1, action: 'DISPLAY'}],
+    alarms: [{minutesBefore: 1, action: 'DISPLAY', uuid: '96b684c4-abcd-1234'}],
 };
 
 /** Run updateEvent with fetch mocked; returns the parsed PUT body. */
@@ -69,9 +69,20 @@ async function updatePayload({event = STORED_EVENT, reminderMinutesBefore} = {})
     return payload;
 }
 
-test('partial update preserves an existing alarm in WRITE shape {number, unit, type}', async () => {
+test('partial update preserves an existing alarm in WRITE shape {number, unit, type} with its uuid', async () => {
     const body = await updatePayload();
-    assert.deepEqual(body.alarms, [{number: 1, unit: 'minute', type: 'DISPLAY'}]);
+    assert.deepEqual(body.alarms, [{number: 1, unit: 'minute', type: 'DISPLAY', uuid: '96b684c4-abcd-1234'}]);
+});
+
+test('every alarm sent on PUT carries a uuid key (missing uuid key → live API 500 unexpected_error)', async () => {
+    const body = await updatePayload();
+    for (const alarm of body.alarms) {
+        assert.ok('uuid' in alarm, `alarm entry missing uuid key: ${JSON.stringify(alarm)}`);
+    }
+    const cleared = await updatePayload({reminderMinutesBefore: 30});
+    for (const alarm of cleared.alarms) {
+        assert.ok('uuid' in alarm, `alarm entry missing uuid key: ${JSON.stringify(alarm)}`);
+    }
 });
 
 test('preserved alarm never uses the stored shape ({minutesBefore, action})', async () => {
@@ -89,9 +100,9 @@ test('event without alarms sends an empty alarms array', async () => {
     assert.deepEqual(body.alarms, []);
 });
 
-test('explicit reminder_minutes_before overrides the existing alarm', async () => {
+test('explicit reminder_minutes_before overrides the existing alarm (keeping its uuid)', async () => {
     const body = await updatePayload({reminderMinutesBefore: 30});
-    assert.deepEqual(body.alarms, [{number: 30, unit: 'minute', type: 'DISPLAY'}]);
+    assert.deepEqual(body.alarms, [{number: 30, unit: 'minute', type: 'DISPLAY', uuid: '96b684c4-abcd-1234'}]);
 });
 
 test('reminder_minutes_before=0 clears the alarm', async () => {
@@ -100,6 +111,11 @@ test('reminder_minutes_before=0 clears the alarm', async () => {
 });
 
 test('stored alarm with EMAIL action keeps its type, uppercased', async () => {
-    const body = await updatePayload({event: {...STORED_EVENT, alarms: [{minutesBefore: 1440, action: 'email'}]}});
-    assert.deepEqual(body.alarms, [{number: 1440, unit: 'minute', type: 'EMAIL'}]);
+    const body = await updatePayload({event: {...STORED_EVENT, alarms: [{minutesBefore: 1440, action: 'email', uuid: 'u-email'}]}});
+    assert.deepEqual(body.alarms, [{number: 1440, unit: 'minute', type: 'EMAIL', uuid: 'u-email'}]);
+});
+
+test('stored alarm without a uuid is sent with uuid: null (key must be present on PUT)', async () => {
+    const body = await updatePayload({event: {...STORED_EVENT, alarms: [{minutesBefore: 15, action: 'DISPLAY', uuid: null}]}});
+    assert.deepEqual(body.alarms, [{number: 15, unit: 'minute', type: 'DISPLAY', uuid: null}]);
 });
