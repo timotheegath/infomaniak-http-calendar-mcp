@@ -1,4 +1,4 @@
-import { buildAlarms } from "./alarms.js";
+import { buildAlarms, storedAlarmsToWriteShape } from "./alarms.js";
 
 export class CalendarClient {
     private readonly token: string;
@@ -230,7 +230,7 @@ export class CalendarClient {
         return response.json();
     }
 
-    async updateEvent(eventId: string, title: string | undefined, start: string | undefined, end: string | undefined, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string, notifyAttendees: boolean = false): Promise<any> {
+    async updateEvent(eventId: string, title: string | undefined, start: string | undefined, end: string | undefined, description: string | undefined, attendees: string | undefined, rrule: string | undefined, calendarId?: string, notifyAttendees: boolean = false, reminderMinutesBefore?: number): Promise<any> {
         const existing = await this.getEvent(eventId);
         const event = existing.data;
 
@@ -250,6 +250,16 @@ export class CalendarClient {
         if (attendees !== undefined) {
             calendarAttendees = await this.buildAttendees(attendees, profile);
         }
+
+        // The PUT endpoint is a full update and validates `alarms` in the
+        // WRITE shape {number, unit, type}. The GET response carries the
+        // STORED shape {minutesBefore, action}, so echoing it back fails
+        // with validation_rule_required on alarms.0.* — convert it, or
+        // replace it entirely when the caller passes reminder_minutes_before
+        // (0 clears all alarms).
+        const alarms = reminderMinutesBefore !== undefined
+            ? buildAlarms(event.fullday ?? false, reminderMinutesBefore)
+            : storedAlarmsToWriteShape(event.alarms || []);
 
         const response = await fetch(
             `https://api.infomaniak.com/1/calendar/pim/event/${eventId}`,
@@ -272,7 +282,7 @@ export class CalendarClient {
                     ...(event.location ? {location: event.location} : {}),
                     color: event.color ?? null,
                     attendees: calendarAttendees,
-                    alarms: event.alarms || [],
+                    alarms,
                     attachments: event.attachments || [],
                     rrule: rrule !== undefined ? rrule : (event.rrule || ""),
                     meet_room_url: event.meet_room_url || "",
