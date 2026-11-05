@@ -43,3 +43,45 @@ export function buildAlarms(
 
     return [{ number: 10, unit: "minute", type: "DISPLAY" }];
 }
+
+export type AlarmWriteShape = { number: number; unit: string; type: string };
+
+/**
+ * Convert alarms as returned by GET (the STORED representation
+ * `[{ minutesBefore, action }]`) into the WRITE representation the
+ * POST/PUT endpoints require (`[{ number, unit, type }]`).
+ *
+ * The server stores every alarm as minutesBefore, so expressing the
+ * preserved alarm in `minute` units round-trips exactly. Alarms already
+ * in write shape are passed through unchanged. Entries in neither shape
+ * are dropped.
+ *
+ * Without this conversion, a PUT that echoes the stored alarms back is
+ * rejected with validation errors on `alarms.0.number` / `.unit` / `.type`.
+ *
+ * Pure / no I/O so it can be unit-tested without network.
+ */
+export function storedAlarmsToWriteShape(stored: any[]): AlarmWriteShape[] {
+    if (!Array.isArray(stored)) {
+        return [];
+    }
+
+    const writeShape: AlarmWriteShape[] = [];
+    for (const alarm of stored) {
+        if (!alarm || typeof alarm !== "object") {
+            continue;
+        }
+        if (typeof alarm.number === "number" && alarm.unit && alarm.type) {
+            writeShape.push({ number: alarm.number, unit: String(alarm.unit).toLowerCase(), type: String(alarm.type).toUpperCase() });
+            continue;
+        }
+        if (typeof alarm.minutesBefore === "number") {
+            writeShape.push({
+                number: alarm.minutesBefore,
+                unit: "minute",
+                type: String(alarm.action ?? "DISPLAY").toUpperCase(),
+            });
+        }
+    }
+    return writeShape;
+}

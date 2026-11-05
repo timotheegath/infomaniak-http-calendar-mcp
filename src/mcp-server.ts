@@ -116,9 +116,10 @@ export function createCalendarMcpServer(token: string): McpServer {
             rrule: z.string().describe("Recurrence rule in RFC 5545 format, e.g. FREQ=WEEKLY;INTERVAL=1;BYDAY=MO or FREQ=DAILY or FREQ=MONTHLY;BYMONTHDAY=15. Use empty string to remove recurrence.").optional(),
             calendar_id: z.string().describe("Calendar ID (optional, uses event's calendar if not provided)").optional(),
             notify_attendees: z.boolean().describe("Send the updated invitation to attendees via email (imip). Defaults to false.").optional(),
+            reminder_minutes_before: z.number().int().nonnegative().describe("Minutes before start to fire the reminder. 0 = remove the reminder. Omit to keep the event's existing alarm unchanged.").optional(),
         },
-        async ({event_id, title, start, end, description, attendees, rrule, calendar_id, notify_attendees}) => {
-            const response = await calendarClient.updateEvent(event_id, title, start, end, description, attendees, rrule, calendar_id, notify_attendees);
+        async ({event_id, title, start, end, description, attendees, rrule, calendar_id, notify_attendees, reminder_minutes_before}) => {
+            const response = await calendarClient.updateEvent(event_id, title, start, end, description, attendees, rrule, calendar_id, notify_attendees, reminder_minutes_before);
 
             return {
                 content: [{type: "text", text: JSON.stringify(response.data)}],
