@@ -1,4 +1,4 @@
-import { buildAlarms, storedAlarmsToWriteShape } from "./alarms.js";
+import { alarmsForUpdate, buildAlarms } from "./alarms.js";
 
 export class CalendarClient {
     private readonly token: string;
@@ -256,10 +256,11 @@ export class CalendarClient {
         // STORED shape {minutesBefore, action}, so echoing it back fails
         // with validation_rule_required on alarms.0.* — convert it, or
         // replace it entirely when the caller passes reminder_minutes_before
-        // (0 clears all alarms).
-        const alarms = reminderMinutesBefore !== undefined
-            ? buildAlarms(event.fullday ?? false, reminderMinutesBefore)
-            : storedAlarmsToWriteShape(event.alarms || []);
+        // (0 clears all alarms). Live-verified: on PUT, each alarm entry
+        // must also carry a `uuid` key when the event already has alarms,
+        // otherwise the API answers a bare 500 unexpected_error —
+        // alarmsForUpdate attaches the stored uuid (or null) for that.
+        const alarms = alarmsForUpdate(event.alarms || [], event.fullday ?? false, reminderMinutesBefore);
 
         const response = await fetch(
             `https://api.infomaniak.com/1/calendar/pim/event/${eventId}`,
